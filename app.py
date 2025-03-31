@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import json
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
@@ -39,6 +40,7 @@ def register():
         return jsonify({'error': 'User already exists'}), 400
 
     users[username] = generate_password_hash(password)
+
     save_users(users)
 
     return jsonify({'message': 'User registered successfully'}), 201
