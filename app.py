@@ -1,17 +1,20 @@
 from flask import Flask, render_template, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+import json
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+USER_DATA_FILE = "users.json"
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(256), nullable=False)
+def load_users():
+    try:
+        with open(USER_DATA_FILE, "r") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_users(users):
+    with open(USER_DATA_FILE, "w") as file:
+        json.dump(users, file, indent=4)
 
 @app.route('/')
 def home():
@@ -30,13 +33,13 @@ def register():
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400
 
-    if User.query.filter_by(username=username).first():
+    users = load_users()
+
+    if username in users:
         return jsonify({'error': 'User already exists'}), 400
 
-    hashed_password = generate_password_hash(password)
-    new_user = User(username=username, password=hashed_password)
-    db.session.add(new_user)
-    db.session.commit()
+    users[username] = generate_password_hash(password)
+    save_users(users)
 
     return jsonify({'message': 'User registered successfully'}), 201
 
@@ -46,13 +49,13 @@ def login():
     username = data.get('username')
     password = data.get('password')
 
-    user = User.query.filter_by(username=username).first()
-    if not user or not check_password_hash(user.password, password):
+    users = load_users()
+    hashed_password = users.get(username)
+
+    if not hashed_password or not check_password_hash(hashed_password, password):
         return jsonify({'error': 'Invalid credentials'}), 401
 
     return jsonify({'message': 'Login successful'}), 200
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
